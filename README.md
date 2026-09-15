@@ -4,7 +4,7 @@ A browser-based biology game in which students manually manage the homeostasis l
 
 ## Run locally
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.14 or newer (headless runs use built-in TypeScript support).
 
 ```bash
 npm ci
@@ -29,3 +29,23 @@ The resulting Pages URL is public and requires no ChatGPT account or application
 - `npm run build` — create the static site in `dist/`
 - `npm run preview` — preview the static build locally
 - `npm run lint` — check the source code
+- `npm test` — run engine, scenario, and learner-progress regression tests
+- `npm run sim -- --scenario all --format csv` — run the headless scenario matrix
+
+## Simulation and learning mode
+
+The browser and headless runner share the same simulation. The default hot-weather lesson uses manual corrective feedback, finite fuel/effort reserves, hydration-limited sweating, and humidity-limited evaporation.
+
+The colored normal bands remain visible as a hint; their numeric bounds are hidden until a failed run or 15 cumulative minutes of active, moving play without dangerous vitals. Progress is saved in this browser; restarting a race does not erase it. Pause/Resume freezes the race, controls, animation, cooldowns, and learning time. The timer also pauses when the page is hidden or while help is open. Losing window focus alone does not pause it. This is a classroom model, not a clinical diagnostic tool.
+
+```bash
+npm test
+npm run sim -- --scenario all --format csv
+npm run sim -- --scenario analytical --output /tmp/analytical.json
+```
+
+The simulations run without rendering or waiting. `--dt` is simulated seconds per integration step, not a speed multiplier. Use `runSimulation({ trace: true })` for full trajectories or pass custom policies and configurations.
+
+See [model assumptions and sources](docs/rebalance.md) and [persona outcomes and tuning comparisons](docs/playtesting.md).
+
+Contributor and coding-agent guidance is in [AGENTS.md](AGENTS.md).
