@@ -16,37 +16,49 @@ Times are active classroom seconds. Counts include accepted actions, not failed 
 
 | Policy | Outcome | Classroom s | Distance m | Primary endpoint | Actions |
 | --- | --- | ---: | ---: | --- | ---: |
-| balanced | finished | 671 | 40,000 | — | 54 |
-| cautious | finished | 952 | 40,000 | — | 33 |
-| analytical | finished | 671 | 40,000 | — | 58 |
-| impatient | finished | 663 | 40,000 | — | 74 |
-| overcorrector | collapsed | 638 | 34,266 | Hypoglycemia | 144 |
+| balanced | finished | 747 | 40,000 | — | 78 |
+| cautious | finished | 952 | 40,000 | — | 47 |
+| analytical | finished | 747 | 40,000 | — | 82 |
+| impatient | collapsed | 7 | 539 | Low blood oxygen | 8 |
+| overcorrector | collapsed | 844 | 35,587 | Hypoglycemia | 176 |
 | neglect-breathing | collapsed | 7 | 488 | Low blood oxygen | 7 |
-| neglect-cooling | collapsed | 131 | 7,076 | Heat emergency | 40 |
-| no-food | collapsed | 238 | 12,876 | Hypoglycemia | 28 |
+| neglect-cooling | collapsed | 100 | 5,394 | Heat emergency | 39 |
+| no-food | collapsed | 223 | 11,982 | Hypoglycemia | 28 |
 | overdrink-water | collapsed | 639 | 26,279 | Hyponatremia | 224 |
 | overdrink-electrolyte | collapsed | 914 | 37,834 | Hyponatremia | 317 |
-| no-drink | collapsed | 659 | 38,160 | Heat emergency | 31 |
+| no-drink | collapsed | 404 | 22,854 | Heat emergency | 30 |
 | no-drink-jog | finished | 965 | 40,000 | — | 17 |
-| sprint-forever | collapsed | 131 | 7,076 | Heat emergency | 40 |
+| sprint-forever | collapsed | 100 | 5,394 | Heat emergency | 39 |
+| max-controls | collapsed | 125 | 4,932 | Hypoglycemia | 47 |
+| max-controls-fed | collapsed | 586 | 27,756 | Hypoglycemia | 62 |
+| set-and-forget | collapsed | 357 | 21,396 | Heat emergency | 30 |
+| fixed-controls | collapsed | 404 | 22,854 | Heat emergency | 36 |
 
 The two overdrinking experiments use matched jogging, sweat level 1, and food maintenance; only the drink differs. Sports drink delays dilution without preventing it. The running no-drink case loses cooling capacity and reaches heat failure; a separate gentler no-drink jog finishes with dehydration and sodium warnings. Not every imperfect strategy is forced to collapse.
 
-Known limitation: the cautious policy maintains excessive cooling and reaches approximately 31°C while still finishing. The model intentionally has no cold-collapse endpoint, but this is an unrealistic successful trajectory for the default hot-weather lesson. A future heat-balance pass should address overcooling; completion alone does not establish physiological plausibility.
+## Revision findings
 
-The impatient policy initially oscillated between adjacent settings hundreds of times. Giving it distinct surge/recovery thresholds reduced that artificial chatter to 74 accepted actions; its final advantage over steady running is only about eight seconds. The overcorrector repeatedly releases hormones and fluids but still exhausts its fuel supply. These observations support a pacing tradeoff, not a claim that simulated agents can measure human enjoyment.
+Exercise reserve, oxygen delivery, and automatic fuel-related pace restrictions are removed. Managed play still finishes in about 12.5 minutes with 78 accepted actions. Unsupported immediate sprinting can fail on oxygen within 7 classroom seconds; preparing breathing first allows the sprint probe to continue until heat failure at about 100 seconds. The impatient probe now exposes this fast failure; it is not evidence of a comfortable reaction window for students. Pause remains available.
 
-## Small tuning sweep
+The max-controls probe sets breathing to 40, heart rate to 200, sweat to maximum, and pace to Running, without food or drinks. It fails on glucose at 125 seconds versus 223 seconds for the matched-control no-food probe. Startup action counts differ, so this is a behavioral comparison rather than an isolated measurement. It does not maximize hormones or repeatedly eat/drink.
 
-Same policies and clock; only heat production scale varies.
+A controlled comparison starts two running states at 90 mg/dL with identical cooling and fuel stores. After 60 classroom seconds, matched settings (140 beats/min, 26 breaths/min) yield 79.92 mg/dL; maximum settings (200, 40) yield 70.42 mg/dL. Both maintain 98% saturation. The control-cost coefficients were reduced by half from the first trial to leave more room for recovery. Regression checks cover each excessive control separately, low heart rate without changing saturation, and readjustment after slowing down.
 
-| Heat scale | Steady run: seconds / actions | Impatient: seconds / actions |
-| --- | --- | --- |
-| 1.1 | 671 / 50 | 632 / 134 |
-| **1.2 (default)** | **671 / 54** | **663 / 74** |
-| 1.3 | 691 / 163 | 684 / 203 |
+The cautious policy now reduces sweat when temperature falls below 37°C, rather than leaving cooling pegged and finishing near 31°C. This is a policy improvement, not a new automatic body response. The model still lacks a cold-collapse endpoint; excessive cooling remains a model limitation.
 
-All six finish. The hotter setting raises policy correction burden sharply, so 1.2 is the first classroom candidate. A cautious jog takes about 16 minutes; this is a slower alternative rather than the 8–12 minute running target.
+Previous heat-scale sweep results are superseded by these mechanics. The default heat scale remains 1.2. Weather changes and a 40°C game heat-stop threshold replace the static-weather challenge. A small weather-duration sweep showed that short hot stretches allowed fixed settings to coast through; a longer hot/humid stretch makes fixed running fail on heat while attentive play succeeds. The responsive policy uses a 38.3°C slowdown / below-38°C recovery interval to avoid rapidly toggling pace. No claim of optimal coefficients or student enjoyment is implied.
+
+The fixed-controls probe holds running pace, heart rate 140, breathing 26, and sweat level 2 after setup, but still replenishes food and electrolyte drink. It finishes with constant starting weather and fails on heat with the changing-weather course. This isolates the need to respond to conditions from merely remembering to eat. The set-and-forget probe stops all actions after two minutes of attentive play and also collapses. Tests check a heat-warning window of at least ten classroom seconds and that the attentive policy slows down after the first weather shift and reduces sweat after the cooler shift.
+
+Halving the integration step preserves completion time within one classroom second and vital extrema within 0.5 units. One extra drink can occur at a threshold crossing; exact action-count identity is not required. Timed action scheduling remains checked independently.
+
+## Banana allowance comparison
+
+Three bananas per race leaves one spare for the balanced probe, which finishes using two. Cautious play uses one. Eating still has delayed absorption and a 45-second classroom cooldown; cooldown clicks and rejected empty-inventory clicks do not consume inventory or restart cooldowns.
+
+The max-controls-fed probe keeps heart rate at 200 and breathing at 40 while using the balanced policy's pace, cooling, food, and fluid corrections. It does not lower those two controls or add hormone interventions. With a large allowance, it finishes in 790 classroom seconds using five bananas. With the default three, it collapses from hypoglycemia at 586 seconds. In an allowance sweep, two bananas fail at 432 seconds; four fail at 739 seconds. Three was selected to leave recovery room for attentive play while preventing this particular food-compensation strategy from succeeding. This is not proof against every strategy involving hormones or alternate pacing.
+
+Regression tests verify inventory exhaustion after cooldown expiry, immutable action handling, restart restocking, managed completion, and the matched fed maximum-controls comparison. Browser checks verify the remaining-count label and empty-state feedback.
 
 ## Extending the experiments
 

@@ -34,7 +34,7 @@ The resulting Pages URL is public and requires no ChatGPT account or application
 
 ## Simulation and learning mode
 
-The browser and headless runner share the same simulation. The default hot-weather lesson uses manual corrective feedback, finite fuel/effort reserves, hydration-limited sweating, and humidity-limited evaporation.
+The browser and headless runner share the same simulation. The default hot-weather lesson uses manual corrective feedback, finite fuel stores and pace-dependent control costs, hydration-limited sweating, and humidity-limited evaporation. Temperature and humidity change during the race; responsive play must readjust pace and cooling. Sprinting has no stamina lockout, and capped controls show their limits. Each race provides three bananas, with a visible remaining count and an “Out of bananas” state.
 
 The colored normal bands remain visible as a hint; their numeric bounds are hidden until a failed run or 15 cumulative minutes of active, moving play without dangerous vitals. Progress is saved in this browser; restarting a race does not erase it. Pause/Resume freezes the race, controls, animation, cooldowns, and learning time. The timer also pauses when the page is hidden or while help is open. Losing window focus alone does not pause it. This is a classroom model, not a clinical diagnostic tool.
 

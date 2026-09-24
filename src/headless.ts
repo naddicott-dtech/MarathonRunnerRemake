@@ -12,6 +12,7 @@ import {
   status,
   startGame,
   step,
+  paceDemand,
 } from "./simulation.ts";
 import type { Action, Game, SimulationConfig } from "./simulation.ts";
 
@@ -28,7 +29,11 @@ export type ScenarioName =
   | "overdrink-electrolyte"
   | "no-drink"
   | "no-drink-jog"
-  | "sprint-forever";
+  | "sprint-forever"
+  | "max-controls"
+  | "max-controls-fed"
+  | "set-and-forget"
+  | "fixed-controls";
 
 export type PolicyName = Exclude<ScenarioName, "balanced"> | "balanced";
 
@@ -46,8 +51,6 @@ export type VisibleStatuses = {
   temperature: VitalStatus;
   sodium: VitalStatus;
   hydration: VitalStatus;
-  oxygenDelivery: VitalStatus;
-  reserve: VitalStatus;
 };
 
 export type PolicyContext = {
@@ -89,16 +92,18 @@ export type TraceSample = {
   temperature: number;
   sodium: number;
   hydration: number;
-  oxygenDelivery: number;
-  reserve: number;
   glycogen: number;
   muscleGlycogen: number;
   heartRate: number;
   breathingRate: number;
   sweatLevel: number;
+  outdoorTemperature: number;
+  humidity: number;
+  weather: string;
   gutWater: number;
   gutElectrolyte: number;
   gutCarbs: number;
+  bananasRemaining: number;
   action?: Action;
 };
 
@@ -118,8 +123,6 @@ export type RunSummary = {
     temperature: { min: number; max: number };
     sodium: { min: number; max: number };
     hydration: { min: number; max: number };
-    oxygenDelivery: { min: number; max: number };
-    reserve: { min: number; max: number };
     distance: { min: number; max: number };
   };
 };
@@ -148,6 +151,10 @@ const SCENARIOS: readonly ScenarioName[] = [
   "no-drink",
   "no-drink-jog",
   "sprint-forever",
+  "max-controls",
+  "max-controls-fed",
+  "set-and-forget",
+  "fixed-controls",
 ];
 
 export const SCENARIO_NAMES = SCENARIOS;
@@ -166,8 +173,6 @@ export function visibleStatuses(game: Game): VisibleStatuses {
     temperature: status("temperature", game.temperature),
     sodium: status("sodium", game.sodium),
     hydration: game.hydration < -2 || game.hydration > 1 ? (game.hydration < -5 || game.hydration > 3 ? "danger" : "warning") : "normal",
-    oxygenDelivery: game.oxygenDelivery < 95 ? (game.oxygenDelivery <= 85 ? "danger" : "warning") : "normal",
-    reserve: game.reserve < 35 ? (game.reserve <= 10 ? "danger" : "warning") : "normal",
   };
 }
 
@@ -190,11 +195,9 @@ function chooseBreathing(game: Game, target: number): Action | undefined {
 }
 
 function urgentCorrection(game: Game, statuses: VisibleStatuses): Action | undefined {
-  if (statuses.oxygen === "danger" || statuses.oxygenDelivery === "danger") {
-    // Restore the controllable part of oxygen delivery before sacrificing
-    // pace.  This keeps managed policies distinct from neglect-breathing.
-    const requiredBreathing = [12, 20, 26, 12, 34][game.pace];
-    const requiredHeart = [60, 105, 140, 60, 180][game.pace];
+  if (statuses.oxygen !== "normal") {
+    // Respond to the visible oxygen reading before changing pace.
+    const { breathing: requiredBreathing, heart: requiredHeart } = paceDemand(game.pace);
     if (game.breathingRate < requiredBreathing - 1) return "breatheUp";
     if (game.heartRate < requiredHeart - 3) return "heartUp";
     return "paceDown";
@@ -214,9 +217,9 @@ function maintenanceAction(game: Game, statuses: VisibleStatuses, style: "balanc
   const urgent = urgentCorrection(game, statuses);
   if (urgent) return urgent;
 
-  if (statuses.temperature !== "normal" && game.temperature >= 38.2) {
+  if (game.temperature >= 37.8) {
     if (game.sweatLevel < 3) return "sweat";
-    return game.pace > 1 ? "paceDown" : undefined;
+    if (game.temperature >= 38.3) return game.pace > 1 ? "paceDown" : undefined;
   }
   if (statuses.temperature !== "normal" && game.pace > 1) return "paceDown";
   if (statuses.glucose !== "normal" && game.glucose < 78) return style === "overcorrector" ? "glucagon" : "banana";
@@ -231,7 +234,8 @@ function maintenanceAction(game: Game, statuses: VisibleStatuses, style: "balanc
     if (game.sodium > 142 || game.hydration < -0.5) return "water";
     if (game.glucose < 100) return game.glucagon < 145 ? "glucagon" : "banana";
   }
-  if (style === "cautious" && game.temperature > 37.3) return "sweat";
+  if (game.temperature < 37 && game.sweatLevel > 0) return "sweatDown";
+  if (style === "cautious" && game.temperature > 37.3 && game.sweatLevel < 3) return "sweat";
   if (style === "analytical" && game.hydration < -0.8 && game.sodium >= 135) return "electrolyte";
   return undefined;
 }
@@ -239,15 +243,12 @@ function maintenanceAction(game: Game, statuses: VisibleStatuses, style: "balanc
 function standardPolicy(style: "balanced" | "cautious" | "analytical" | "impatient" | "overcorrector"): Policy {
   let recovering = false;
   return (game, context) => {
-    if (game.reserve < 25 || game.temperature >= 38.3) recovering = true;
-    if (game.reserve > 85 && game.temperature < 37.8) recovering = false;
+    if (game.temperature >= 38.3) recovering = true;
+    if (game.temperature < 38) recovering = false;
     const correction = maintenanceAction(game, context.statuses, style);
     if (correction) return correction;
 
-    // The impatient persona still surges, but can see the reserve meter and
-    // waits for recovery instead of repeatedly clicking an exhausted sprint
-    // control.  That keeps its action burden comparable to a real student.
-    const targetPace: Game["pace"] = game.temperature >= 38.5 || style === "cautious" ? 1 : style === "impatient" ? (recovering ? 2 : 4) : 2;
+    const targetPace: Game["pace"] = recovering || style === "cautious" ? 1 : style === "impatient" ? 4 : 2;
     const paceAction = choosePace(game, targetPace);
     if (paceAction) return paceAction;
     const heartTarget = targetPace === 4 ? 180 : targetPace === 2 ? 145 : 105;
@@ -257,6 +258,27 @@ function standardPolicy(style: "balanced" | "cautious" | "analytical" | "impatie
 }
 
 function diagnosticPolicy(name: ScenarioName): Policy {
+  // Keep pace, breathing, heart rate and sweat fixed after setup, but still
+  // replace food/fluid. This isolates failure to adapt to the weather.
+  if (name === "fixed-controls") return (game) => chooseBreathing(game, 26)
+    ?? chooseHeart(game, 140) ?? choosePace(game, 2)
+    ?? (game.sweatLevel < 2 ? "sweat" : undefined)
+    ?? (game.glucose < 80 && game.gutCarbs < 10 ? "banana" : undefined)
+    ?? (game.hydration < -1 && game.gutWater + game.gutElectrolyte < .3 ? "electrolyte" : undefined);
+  if (name === "set-and-forget") {
+    const managed = standardPolicy('balanced');
+    return (game, context) => game.classroomTime < 120 ? managed(game, context) : undefined;
+  }
+  if (name === "max-controls-fed") {
+    const managed = standardPolicy('balanced');
+    return (game, context) => {
+      const maximum = chooseBreathing(game, 40) ?? chooseHeart(game, 200);
+      if (maximum) return maximum;
+      const action = managed(game, context);
+      return action === 'heartDown' || action === 'breatheDown' ? undefined : action;
+    };
+  }
+  if (name === "max-controls") return (game) => chooseBreathing(game, 40) ?? chooseHeart(game, 200) ?? choosePace(game, 2) ?? (game.sweatLevel < 3 ? "sweat" : undefined);
   if (name === "neglect-breathing") return (game) => choosePace(game, 4) ?? chooseHeart(game, 180);
   if (name === "neglect-cooling") return (game) => chooseBreathing(game, 34) ?? chooseHeart(game, 180) ?? choosePace(game, 4) ?? (game.glucose < 85 && game.gutCarbs < 10 ? "banana" : undefined);
   if (name === "no-food") return (game) => chooseBreathing(game, 26) ?? chooseHeart(game, 140) ?? choosePace(game, 2) ?? (game.sweatLevel < 3 ? "sweat" : undefined);
@@ -292,16 +314,18 @@ function readSample(game: Game, action?: Action): TraceSample {
     temperature: finite(game.temperature),
     sodium: finite(game.sodium),
     hydration: finite(game.hydration),
-    oxygenDelivery: finite(game.oxygenDelivery),
-    reserve: finite(game.reserve),
     glycogen: finite(game.glycogen),
     muscleGlycogen: finite(game.muscleGlycogen),
     heartRate: finite(game.heartRate),
     breathingRate: finite(game.breathingRate),
     sweatLevel: finite(game.sweatLevel),
+    outdoorTemperature: finite(game.weather.temperature),
+    humidity: finite(game.weather.humidity),
+    weather: game.weather.label,
     gutWater: finite(game.gutWater),
     gutElectrolyte: finite(game.gutElectrolyte),
     gutCarbs: finite(game.gutCarbs),
+    bananasRemaining: finite(game.bananasRemaining),
     ...(action ? { action } : {}),
   };
 }
@@ -313,8 +337,6 @@ function updateExtrema(extrema: RunResult["extrema"], game: Game): void {
     temperature: game.temperature,
     sodium: game.sodium,
     hydration: game.hydration,
-    oxygenDelivery: game.oxygenDelivery,
-    reserve: game.reserve,
     distance: game.distance,
   } as const;
   for (const key of Object.keys(values) as (keyof typeof values)[]) {
@@ -331,8 +353,6 @@ function blankExtrema(game: Game): RunResult["extrema"] {
     temperature: { min: game.temperature, max: game.temperature },
     sodium: { min: game.sodium, max: game.sodium },
     hydration: { min: game.hydration, max: game.hydration },
-    oxygenDelivery: { min: game.oxygenDelivery, max: game.oxygenDelivery },
-    reserve: { min: game.reserve, max: game.reserve },
     distance: { min: game.distance, max: game.distance },
   };
 }

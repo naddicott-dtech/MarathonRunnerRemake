@@ -8,7 +8,7 @@ test('only active moving time qualifies; a successful final tick counts', () => 
   const next = { ...previous, classroomTime: .1 };
   assert.equal(advanceProgress(emptyProgress(), previous, next).activeSeconds, .1);
   assert.equal(advanceProgress(emptyProgress(), previous, { ...next, pace: 0 }).activeSeconds, 0);
-  assert.equal(advanceProgress(emptyProgress(), previous, { ...next, oxygenDelivery: 50 }).activeSeconds, 0);
+  assert.equal(advanceProgress(emptyProgress(), previous, { ...next, oxygen: 85 }).activeSeconds, 0);
   assert.equal(advanceProgress(emptyProgress(), previous, previous).activeSeconds, 0);
   assert.equal(advanceProgress(emptyProgress(), initialGame(), next).activeSeconds, 0);
   assert.equal(advanceProgress(emptyProgress(), previous, { ...next, phase: 'finished' }).activeSeconds, .1);

@@ -4,8 +4,8 @@ This is a classroom model, not a clinical predictor. The player takes over the c
 
 ## Learning and pacing
 
-- An ordinary managed race should last approximately 8–12 active classroom minutes.
-- Sustained sprinting uses a finite effort reserve and eventually forces a slowdown. It also raises heat and fuel demand. A high heart-rate setting does not make sprinting sustainable forever.
+- An ordinary managed race should last approximately 8–14 active classroom minutes.
+- Sprinting is always selectable during an active race after the pace cooldown. It raises heat and fuel demand; there is no stamina gate or automatic fuel-related slowdown. Students can deliberately push the runner out of homeostasis.
 - A warning is an opportunity to observe a trend and intervene; not every temporary excursion is a failed run.
 - Current measurements, colored normal bands, and qualitative warnings remain visible. Numeric reference ranges are earned after a failed run or 900 cumulative active classroom seconds without a dangerous vital, while moving. The explicit Pause/Resume control freezes the race, actions, cooldowns, and animation. Paused, hidden-page, idle, and terminal time do not count. Losing focus while the page remains visible does not itself pause the race. Progress is saved on this browser and survives restarting a race.
 - The reference unlock is a learning aid, not an anti-cheat system. Source code contains the thresholds. A shared classroom browser also shares its saved progress.
@@ -14,15 +14,29 @@ This is a classroom model, not a clinical predictor. The player takes over the c
 
 **Clock.** The engine receives simulated seconds. The browser advances 1.2 simulated seconds per 0.1 active classroom seconds, with no background catch-up. Distance and physiological rates share that clock. Interface cooldowns are defined in classroom seconds and converted once. A headless run uses identical steps without waiting; accelerated CPU execution never earns browser learning progress.
 
-**Oxygen.** Ventilation affects saturation. Circulation, saturation, and hydration jointly affect oxygen delivery. Poor delivery can exhaust the effort reserve without pretending that heart rate directly changes arterial oxygen saturation. High saturation does not cause failure.
+**Oxygen.** Ventilation affects saturation. Heart rate does not directly change arterial saturation. High saturation does not cause failure. Oxygen delivery and exercise reserve have been removed from the engine, UI, and progress eligibility.
 
-**Fuel.** Liver glycogen supplies the effective glucose pool; muscle glycogen supports exercise. Glucagon mobilizes finite liver glycogen. Food enters through a delayed gut compartment. Hormone effects decay toward basal values rather than automatically correcting the player's glucose. The concentration conversion represents calibrated buffering, not literal blood volume. The model omits gluconeogenesis, fat oxidation, and full insulin physiology. Sprint reserve is a teaching abstraction, not a measured anaerobic-energy store.
+**Fuel and control matching.** Liver glycogen supplies the effective glucose pool; muscle glycogen remains a tracked store but does not lock pace or trigger collapse. Glucagon mobilizes finite liver glycogen. Food enters through a delayed gut compartment. Each race starts with three bananas (25 g carbohydrate each); accepted eating consumes one immediately, and the existing 45-classroom-second cooldown still applies. Empty inventory blocks eating in the shared engine and displays “Out of bananas.” Restart replenishes the allowance. This is an explicit game-resource limit, not a physiological limit on eating. Hormone effects decay toward basal values rather than automatically correcting glucose. The concentration conversion represents calibrated buffering, not literal blood volume. The model omits gluconeogenesis, fat oxidation, and full insulin physiology.
+
+Heart and breathing work require energy: see [cardiac oxygen demand](https://cvphysiology.com/cad/cad003) and [respiratory muscle energetics](https://pmc.ncbi.nlm.nih.gov/articles/PMC4933622/). These sources do **not** establish the game's glucose coefficients. A direct blood-glucose penalty for mismatched controls is an explicit teaching abstraction, not a clinical prediction or a claim that these muscles use only glucose. Low heart rate is represented as inefficient fuel use; it does not introduce another hidden oxygen meter.
+
+Pace needs (rest/jog/run/sprint) are 60/105/140/180 beats/min and 12/20/26/34 breaths/min. These are gameplay targets, not exercise prescriptions. A tolerance of 10 beats/min and 2 breaths/min avoids a single exact optimum. Extra glucose-pool consumption per simulated second is 0.00006 × excess beats/min plus 0.0003 × excess breaths/min plus 0.000075 × deficient beats/min, outside those tolerances. The existing pool-to-concentration factor is 2. Matching hints use the same pace targets. Lowering pace requires readjusting controls; maximal settings are not always efficient.
 
 **Fluids.** Absorbed drinks enter a body-water pool with a Na-equivalent exchangeable-solute proxy. Sweat and urine remove water and solute. Plasma volume is only a derived estimate, not the entire water reservoir. Drinking 250 mL no longer dumps that entire amount into a 3 L plasma bucket. Sports drink contains 25 mmol/L sodium, remains hypotonic, and cannot prevent dilution if intake persistently exceeds losses. Renal clearance is limited and reduced during harder exercise; this approximates exercise-related water retention without a kidney simulator.
 
-**Heat.** Heat generation rises with pace. Sweat is a persistent, manually selected level, not a five-second button-mashing effect. Humidity caps evaporative cooling; all produced sweat still costs fluid. Dehydration impairs sweat supply and circulation. There is no default cold-collapse or high-glucose-collapse route. Extreme glucose still receives a warning. Outdoor temperature and humidity are configurable in the engine.
+**Heat.** Heat generation rises with pace. Sweat is a persistent, manually selected level: A little, Moderate, Heavy, Out of every pore. The lowest setting still produces basal sweat; these labels describe the selected effort, not measured output when dehydration limits production. Humidity caps evaporative cooling; all produced sweat still costs fluid. Dehydration impairs sweat supply. There is no default cold-collapse or high-glucose-collapse route. Extreme glucose still receives a warning. Outdoor temperature and humidity are configurable in the engine. The default course changes on the shared simulated clock, ramping each transition over 120 simulated seconds (10 classroom seconds):
 
-**Failure.** The severe boundaries are explicit classroom rules: low oxygen, low glucose, heat emergency, low/high sodium, severe dehydration, or exhausted reserve with inadequate oxygen delivery. Heat stroke in real patients requires more than a temperature reading; the UI calls the endpoint a heat emergency. If multiple failures occur in one step they are all retained. Ordinary fatigue forces a slower pace rather than being labeled a medical collapse.
+| Classroom time | Temperature | Humidity | Condition |
+| --- | ---: | ---: | --- |
+| Start | 36°C | 60% | Warm start |
+| 2:30 | 40°C | 85% | Hot, humid stretch |
+| 7:30 | 32°C | 35% | Cooler, drier air |
+| 9:10 | 38°C | 75% | Heat and humidity return |
+| 10:50 | 34°C | 50% | Milder conditions |
+
+These compressed changes represent different course conditions, not a meteorological forecast. They use offsets from configured initial conditions; `weatherChanges: []` gives a controlled constant-weather experiment. The [CDC explanation of heat exchange](https://www.cdc.gov/yellow-book/hcp/environmental-hazards-risks/heat-and-cold-illness-in-travelers.html) supports the direction of hotter air and higher humidity reducing cooling; event timing, heat coefficients, and threshold severity are gameplay choices. Weather cannot advance while the simulation is paused, hidden, in help, or terminal.
+
+**Failure.** The severe boundaries are explicit classroom rules: low oxygen, low glucose, heat emergency at 40°C, low/high sodium, or severe dehydration. Heat stroke in real patients requires more than a temperature reading; the UI calls the endpoint a heat emergency. If multiple failures occur in one step they are all retained. Depleted muscle fuel does not itself cause loss of consciousness.
 
 ## Research informing the direction
 

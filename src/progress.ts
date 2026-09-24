@@ -63,7 +63,7 @@ function isDangerous(game: Game): boolean {
     status("oxygen", game.oxygen),
     status("temperature", game.temperature),
     status("sodium", game.sodium),
-  ].includes("danger") || game.hydration <= -6 || game.oxygenDelivery < 65;
+  ].includes("danger") || game.hydration <= -6;
 }
 
 /** Record only visible, active play.  `classroomTime` is the engine's active

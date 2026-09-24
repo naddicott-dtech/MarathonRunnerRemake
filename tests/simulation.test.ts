@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialGame, startGame, applyAction, step, DEFAULT_CONFIG } from '../src/simulation.ts';
+import { initialGame, startGame, applyAction, step, DEFAULT_CONFIG, controlLimit, weatherAt } from '../src/simulation.ts';
 
 test('ready and terminal states do not advance or accept controls; restart is clean', () => {
   const ready = initialGame();
@@ -37,13 +37,17 @@ test('fluid and solute accounting conserves absorbed inputs and measured losses'
   assert.ok(game.gutWater >= 0 && game.gutElectrolyte >= 0);
 });
 
-test('poor circulation reduces delivery without pretending to reduce arterial saturation', () => {
-  const initial = { ...startGame(initialGame()), pace: 2 as const, breathingRate: 30 };
-  const weak = step(initial, 60);
-  const supported = step({ ...initial, heartRate: 160 }, 60);
-  assert.equal(weak.oxygen, supported.oxygen);
-  assert.ok(weak.oxygenDelivery < supported.oxygenDelivery);
-  assert.ok(weak.reserve < supported.reserve);
+test('matching controls conserves glucose without making heart rate change saturation', () => {
+  const runner = { ...startGame(initialGame()), pace: 2 as const, breathingRate: 26, heartRate: 140 };
+  const matched = step(runner, 120);
+  const excessHeart = step({ ...runner, heartRate: 200 }, 120);
+  const excessBreathing = step({ ...runner, breathingRate: 40 }, 120);
+  const lowHeart = step({ ...runner, heartRate: 60 }, 120);
+  assert.equal(lowHeart.oxygen, matched.oxygen);
+  assert.equal(excessHeart.oxygen, matched.oxygen);
+  for (const other of [excessHeart, excessBreathing, lowHeart]) assert.ok(other.glucose < matched.glucose);
+  const slowed = { ...runner, pace: 1 as const };
+  assert.ok(step(slowed, 120).glucose < step({ ...slowed, breathingRate: 20, heartRate: 105 }, 120).glucose);
 });
 
 test('glucagon cannot release exhausted liver glycogen; automatic hormones do not rescue falling glucose', () => {
@@ -64,11 +68,21 @@ test('sweat cools but costs fluid; humidity limits its cooling benefit', () => {
   assert.ok(humid.temperature > sweating.temperature);
 });
 
-test('an exhausted sprint forces a slowdown and cannot be immediately resumed', () => {
-  const runner = { ...startGame(initialGame()), pace: 4 as const, reserve: 10.01, heartRate: 180, breathingRate: 36 };
-  const tired = step(runner, 1.2);
-  assert.equal(tired.pace, 2);
-  assert.equal(applyAction(tired, 'paceUp'), tired);
+test('sprinting is available even with depleted muscle fuel; effort does not force a slowdown', () => {
+  const runner = { ...startGame(initialGame()), pace: 2 as const, muscleGlycogen: 0, heartRate: 180, breathingRate: 34 };
+  const sprint = applyAction(runner, 'paceUp');
+  assert.equal(sprint.pace, 4);
+  assert.equal(step(sprint, 60).pace, 4);
+});
+
+test('capped controls expose their limits and do not consume cooldowns', () => {
+  const runner = { ...startGame(initialGame()), heartRate: 200, breathingRate: 40, sweatLevel: 3, pace: 4 as const };
+  for (const action of ['heartUp', 'breatheUp', 'sweat', 'paceUp'] as const) {
+    assert.ok(controlLimit(runner, action));
+    assert.equal(applyAction(runner, action), runner);
+  }
+  assert.equal(controlLimit({ ...runner, heartRate: 195 }, 'heartUp'), undefined);
+  assert.equal(controlLimit({ ...runner, heartRate: 40 }, 'heartDown'), 'Minimum');
 });
 
 test('severe vitals stop the run and preserve all simultaneous causes before finish', () => {
@@ -83,11 +97,46 @@ test('large batches subdivide; a smaller step gives equivalent trajectories', ()
   const runner = { ...startGame(initialGame()), pace: 2 as const, heartRate: 150, breathingRate: 28, sweatLevel: 1 };
   const a = step(runner, 600);
   const b = step(runner, 600, { ...DEFAULT_CONFIG, maxStep: .6 });
-  for (const key of ['glucose', 'oxygen', 'temperature', 'sodium', 'reserve'] as const) {
+  for (const key of ['glucose', 'oxygen', 'temperature', 'sodium'] as const) {
     assert.ok(Math.abs(a[key] - b[key]) < .1, `${key} diverged`);
   }
   assert.equal(a.phase, b.phase);
   assert.ok(Math.abs(a.distance - b.distance) < 1e-6);
   assert.throws(() => step(runner, NaN));
   assert.throws(() => step(runner, -1));
+});
+
+
+test('weather follows simulation time with smooth changes; stationary clocks keep conditions fixed', () => {
+  const ready = initialGame();
+  assert.deepEqual(step(ready, 2000).weather, ready.weather);
+  assert.equal(weatherAt(1800).temperature, weatherAt(1799).temperature);
+  assert.ok(weatherAt(1860).humidity > weatherAt(1800).humidity);
+  const running = { ...startGame(ready), time: 1799 };
+  const stepped = step(running, 121);
+  assert.deepEqual(stepped.weather, weatherAt(1920));
+  assert.deepEqual(step(stepped, 0).weather, stepped.weather);
+  assert.deepEqual(step({ ...stepped, phase: 'collapsed' }, 100).weather, stepped.weather);
+  const staticConfig = { ...DEFAULT_CONFIG, weatherChanges: [] };
+  assert.equal(weatherAt(9000, staticConfig).humidity, staticConfig.humidity);
+});
+
+
+test('bananas are finite, only successful eating consumes one, and restarting restocks', () => {
+  let game = startGame(initialGame());
+  const allowance = game.bananasRemaining;
+  assert.equal(allowance, 3);
+  for (let i = 0; i < allowance; i++) {
+    const before = game;
+    game = applyAction(game, 'banana');
+    assert.equal(game.bananasRemaining, allowance - i - 1);
+    assert.equal(game.gutCarbs, before.gutCarbs + 25);
+    assert.equal(before.bananasRemaining, allowance - i);
+    assert.equal(applyAction(game, 'banana'), game, 'cooldown does not consume another banana');
+    if (i < allowance - 1) game = step(game, 45 * DEFAULT_CONFIG.classroomSpeed);
+  }
+  assert.equal(controlLimit(game, 'banana'), 'Out of bananas');
+  game = step(game, 45 * DEFAULT_CONFIG.classroomSpeed);
+  assert.equal(applyAction(game, 'banana'), game, 'empty inventory stays blocked after cooldown');
+  assert.equal(initialGame().bananasRemaining, allowance);
 });
